@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no" />
+    <title>Data Board</title>
+    <script src="/static/jquery-3.2.1.min.js"></script>
+    <!-- 最新版本的 Bootstrap 核心 CSS 文件 -->
+    <link href="/static/bootstrap.css" rel="stylesheet" />
+    <!-- 最新的 Bootstrap 核心 JavaScript 文件 -->
+    <script src="/static/bootstrap.js"></script>
+    <script src="/static/echarts.min.js"></script>
+    <!--<script src="https://cdn.hcharts.cn/highcharts/highcharts.js"></script>-->
+    <script>
+    var SelectedItem = new Array(),
+        freq = 'M',
+        sample_method = 'last',
+        start_time,
+        end_time,
+        backdata;
+
+    function get_list() {
+        var Myinput = $("#txtinput").val();
+        if (Myinput.length > 1) {
+            var post_data = {
+                "Myinput": Myinput
+            };
+            // $("#suggest").load("/databoard/list_query/");
+            try {
+                $.post(
+                    "/databoard/list_query/",
+                    post_data,
+                    function(data, status, xhr) {
+                        $("#suggest").text("");
+                        $.each(data, function() {
+                            $("#suggest").append('<a class="list-group-item">' + this + '</a>');
+                        })
+
+                    })
+
+            } catch (err) {
+                alert(err.message);
+            }
+
+            // $.ajax({
+            // 	type: "POST",
+            // 	url : "/databoard/list_query/",
+            // 	//data: Myinput
+            // }).done(function(sg_list, status, xhr) {
+            // 	alert(sg_list);
+            // 	$("#suggest").append(sg_list[-1]);
+            // 	});
+        } else {
+            $("#suggest").text("");
+        }
+    }
+
+    $(document).on("click", "#search .list-group-item", function() {
+        var sl_item = $(this).text();
+        $("#selection").append('<a class="list-group-item">' + sl_item + '</a>');
+        SelectedItem.push(sl_item);
+    })
+
+    $(document).on("click", "#selection .list-group-item", function() {
+        for (i in SelectedItem) {
+            if (SelectedItem[i] == $(this).text()) {
+                SelectedItem.splice(i, 1);
+            }
+        }
+        $(this).remove();
+    })
+
+    $(document).on("click", ".freq-item", function() {
+        $("#freq").text($(this).text());
+        freq = $(this).text();
+    })
+
+    $(document).on("click", ".method-item", function() {
+        $("#sample_method").text($(this).text());
+        sample_method = $(this).text();
+    })
+
+    // $(document).on("keyup ", "#startTime", function() {
+    //             start_time = $(this).val();
+    // })
+
+    // $(document).on("keyup", "#endTime", function() {
+
+    //     end_time = $(this).val();
+    // })
+
+    $(document).on("click", "#getdata", function() {
+        start_time = $("#startTime").val();
+        end_time = $("#endTime").val();
+        datainfo = {
+            'SelectedItem': SelectedItem,
+            'freq': freq,
+            'sample_method': sample_method,
+            'start_time': start_time,
+            'end_time': end_time
+        }
+        $.post(
+            "/databoard/data_query/",
+            datainfo,
+            function(back_data, status, xhr) {
+                backdata = JSON.parse(back_data);
+                var datadates = new Array();
+                for (var i in backdata['columns']) {
+                    var d = backdata['columns'][i];
+                    var d1 = new Date(d);
+                    datadates.push(d1.toLocaleDateString());
+                }
+                var mySeries = [];
+                var myLegend = [];
+                var myYaxis = [];
+                echarts.dispose(document.getElementById('main'));
+                var myChart = echarts.init(document.getElementById('main'));
+
+                for (var i in backdata["index"]) {
+
+                    myYaxis.push({
+                        name: backdata['index'][i],
+                        
+                        min: 'dataMin',
+                        splitLine: {
+                            show: false
+                        },
+                        offset: Math.max(0, i - 1) * 50
+                    });
+                    mySeries.push({
+                        name: backdata['index'][i],
+                        type: 'line',
+                        yAxisIndex: i,
+                        data: backdata['data'][i],
+                        connectNulls: true
+                    });
+                    myLegend.push(backdata['index'][i]);
+                }
+                myChart.setOption({
+                    legend: {
+                        data: myLegend
+                    },
+                    yAxis: myYaxis,
+                    xAxis: {
+                        // type:'time',
+                        data: datadates
+                    },
+                    series: mySeries,
+                    dataZoom: [{
+                            type: 'inside',
+                            xAxisIndex: 0,
+                            start: 0,
+                            end: 100
+                        },
+                        {
+                            show: true,
+                            xAxisIndex: 0,
+                            type: 'slider',
+                            // top: '85%',
+                            start: 0,
+                            end: 100
+                        }
+                    ],
+                    toolbox: {
+                        show: true,
+                        feature: {
+                            dataZoom: {
+                            	yAxisIndex:false
+                            },
+                            dataView: {
+                                readOnly: false
+                            },
+                            magicType: {
+                                type: ['line', 'bar']
+                            },
+                            restore: {},
+                            saveAsImage: {}
+                        },
+                    },
+                    brush: {
+                        type: ['rect', 'lineX', 'lineY', 'keep', 'clear']
+                    },
+                    tooltip: {
+                        trigger: 'axis',
+                        axisPointer: {
+                            type: 'cross',
+                            snap: true
+                        }
+                    }
+                });
+                myChart.resize;
+                // console.log(myChart)
+            }
+        )
+    })
+    </script>
+</head>
+
+<body>
+    <div class="container-fluid">
+        <div class="row">
+            <div class="col-sm-12">
+                <h1 class="display-3">Data Board</h1>
+            </div>
+        </div>
+        <div class="row">
+            <div class="col-sm-6">
+                <div class="btn-group">
+                    <button type="button" class="btn btn-default dropdown-toggle" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false" id="freq"> 频率 <span class="caret"></span> </button>
+                    <ul class="dropdown-menu">
+                        <li class="freq-item"><a href="#">D</a></li>
+                        <li class="freq-item"><a href="#">W</a></li>
+                        <li class="freq-item"><a href="#">M</a></li>
+                        <li class="freq-item"><a href="#">Q</a></li>
+                        <li class="freq-item"><a href="#">A</a></li>
+                    </ul>
+                </div>
+                <div class="btn-group">
+                    <button type="button" class="btn btn-default dropdown-toggle" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false" id="sample_method"> 取样方法 <span class="caret"></span> </button>
+                    <ul class="dropdown-menu">
+                        <li class="method-item"><a href="#">last</a></li>
+                        <li class="method-item"><a href="#">mean</a></li>
+                        <li class="method-item"><a href="#">sum</a></li>
+                    </ul>
+                </div>
+                <button type="button" id="getdata" class="btn btn-primary">提取数据</button>
+                <button type="button" id="save" class="btn btn-success">保存模板</button>
+            </div>
+        </div>
+        <div class="row">
+            <br>
+            <div class="col-sm-2">
+                <div class="input-group input-group">
+                    <span class="input-group-addon">Start</span>
+                    <input type="date" id="startTime" value="2007-01-01" class="form-control" />
+                </div>
+                <br>
+                <div class="input-group input-group">
+                    <span class="input-group-addon">End</span>
+                    <input type="date" id="endTime" class="form-control" />
+                </div>
+            </div>
+        </div>
+        <div class="row">
+            <div class="col-sm-4">
+                <br>
+                <h4 class="display-6">已选指标</h4>
+                <div class="list-group" id="selection"></div>
+            </div>
+            <div class="col-sm-8">
+                <div id="main" style="min-height: 600px;"></div>
+            </div>
+            <!-- <canvas id="container" style="min-width:800px;height:400px"></canvas> -->
+        </div>
+        <div id="search" class="row">
+            <div class="col-sm-4">
+                <input type="text" id="txtinput" class="form-control" placeholder="在此搜索指标" onkeyup="get_list()" autocomplete="Off" />
+                <div class="list-group" id="suggest"></div>
+            </div>
+            <div class="col-sm-4">
+            </div>
+            <div class="col-sm-4">
+            </div>
+        </div>
+    </div>
+</body>
+
+</html>
